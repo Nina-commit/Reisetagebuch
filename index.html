@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unser Reisetagebuch</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<style>
+:root{--bg:#f2f6f7;--card:#fff;--ink:#14283a;--muted:#4d6275;--main:#0e5a6b;--main-ink:#fff;--sun:#f0b429;--line:#c9d6dc;--danger:#a32a2a}
+@media (prefers-color-scheme:dark){:root{--bg:#10202b;--card:#182d3b;--ink:#eef4f7;--muted:#a9bccb;--main:#4cb5c9;--main-ink:#0b1b24;--sun:#f0b429;--line:#2f4858;--danger:#ff8f8f}}
+*{box-sizing:border-box}
+html{font-size:20px}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Charter,"Bitstream Charter",Georgia,serif;line-height:1.5}
+header{padding:1.2rem 1rem .6rem;max-width:42rem;margin:0 auto}
+h1{font-size:2rem;margin:0;line-height:1.15}
+header p{margin:.2rem 0 0;color:var(--muted)}
+main{max-width:42rem;margin:0 auto;padding:0 1rem 3rem}
+#map{height:16rem;border-radius:.8rem;border:2px solid var(--line);margin:.8rem 0;background:var(--card)}
+.mapnote{color:var(--muted);font-size:.85rem;margin:-.4rem 0 .8rem}
+button{font:inherit;cursor:pointer;border-radius:.7rem;border:2px solid var(--main);padding:.8rem 1.2rem;min-height:3.2rem}
+button.primary{background:var(--main);color:var(--main-ink);font-weight:bold;width:100%;font-size:1.15rem}
+button.ghost{background:transparent;color:var(--main)}
+button.danger{background:transparent;color:var(--danger);border-color:var(--danger)}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:4px solid var(--sun);outline-offset:2px}
+form{background:var(--card);border:2px solid var(--line);border-radius:.8rem;padding:1rem;margin:.8rem 0}
+form[hidden]{display:none}
+label{display:block;font-weight:bold;margin:.8rem 0 .25rem}
+label:first-of-type{margin-top:0}
+input,textarea{font:inherit;width:100%;padding:.7rem;border:2px solid var(--line);border-radius:.6rem;background:var(--bg);color:var(--ink)}
+textarea{min-height:7rem;resize:vertical}
+.row{display:flex;gap:.6rem;margin-top:1rem}
+.row button{flex:1}
+.status{color:var(--muted);margin:.6rem 0 0;min-height:1.5rem}
+ul{list-style:none;padding:0;margin:1.2rem 0 0}
+li{background:var(--card);border:2px solid var(--line);border-left:8px solid var(--sun);border-radius:.8rem;padding:.9rem 1rem;margin-bottom:.8rem}
+li h2{font-size:1.35rem;margin:0}
+li time{color:var(--muted);display:block}
+li p{margin:.5rem 0 0;white-space:pre-wrap}
+.actions{display:flex;gap:.5rem;margin-top:.8rem}
+.actions button{padding:.4rem .9rem;min-height:2.6rem;font-size:.9rem}
+.empty{color:var(--muted);text-align:center;padding:1.5rem 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>Unser Reisetagebuch</h1>
+  <p>Wo wir waren und was wir erlebt haben.</p>
+</header>
+<main>
+  <div id="map" role="img" aria-label="Karte mit allen besuchten Orten"></div>
+  <p class="mapnote" id="mapnote"></p>
+
+  <button class="primary" id="neu">Neue Reise eintragen</button>
+
+  <form id="form" hidden>
+    <label for="datum">Wann?</label>
+    <input type="date" id="datum" required>
+    <label for="ort">Wo? (zum Beispiel Lissabon)</label>
+    <input type="text" id="ort" required autocomplete="off">
+    <label for="notiz">Was haben wir erlebt?</label>
+    <textarea id="notiz"></textarea>
+    <div class="row">
+      <button type="submit" class="primary">Speichern</button>
+      <button type="button" class="ghost" id="abbrechen">Abbrechen</button>
+    </div>
+    <p class="status" id="status" role="status"></p>
+  </form>
+
+  <ul id="liste"></ul>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+(function(){
+  var KEY = "reisetagebuch-v1";
+  var eintraege = laden();
+  var map = null, ebene = null;
+  var $ = function(id){ return document.getElementById(id); };
+
+  function laden(){
+    try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch(e){ return []; }
+  }
+  function speichern(){
+    try { localStorage.setItem(KEY, JSON.stringify(eintraege)); } catch(e){}
+  }
+  function datumText(iso){
+    var d = new Date(iso + "T12:00:00");
+    return isNaN(d) ? iso : d.toLocaleDateString("de-DE", {day:"numeric", month:"long", year:"numeric"});
+  }
+
+  function kartePrüfen(){
+    if (typeof L === "undefined") {
+      $("map").style.display = "none";
+      $("mapnote").textContent = "Die Karte braucht eine Internetverbindung.";
+      return;
+    }
+    map = L.map("map").setView([50, 10], 4);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 18, attribution: "&copy; OpenStreetMap"
+    }).addTo(map);
+    ebene = L.layerGroup().addTo(map);
+  }
+
+  function pinsZeichnen(fokus){
+    if (!map) return;
+    ebene.clearLayers();
+    var punkte = [];
+    eintraege.forEach(function(e){
+      if (typeof e.lat !== "number") return;
+      var p = [e.lat, e.lon];
+      punkte.push(p);
+      L.marker(p).addTo(ebene).bindPopup("<b></b><br>").getPopup()
+        .setContent("<b>" + esc(e.ort) + "</b><br>" + esc(datumText(e.datum)));
+    });
+    if (fokus && typeof fokus.lat === "number") map.setView([fokus.lat, fokus.lon], 9);
+    else if (punkte.length) map.fitBounds(punkte, {padding:[30,30], maxZoom:8});
+  }
+
+  function esc(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function listeZeichnen(){
+    var ul = $("liste");
+    ul.innerHTML = "";
+    if (!eintraege.length) {
+      ul.innerHTML = '<li class="empty">Noch keine Reise eingetragen. Tippe oben auf den blauen Knopf.</li>';
+      return;
+    }
+    eintraege.slice().sort(function(a,b){ return b.datum.localeCompare(a.datum); }).forEach(function(e){
+      var li = document.createElement("li");
+      li.innerHTML = "<h2>" + esc(e.ort) + "</h2><time datetime='" + esc(e.datum) + "'>" + esc(datumText(e.datum)) + "</time>" +
+        (e.notiz ? "<p>" + esc(e.notiz) + "</p>" : "") +
+        '<div class="actions">' +
+        (typeof e.lat === "number" ? '<button class="ghost" data-a="karte">Auf Karte zeigen</button>' : "") +
+        '<button class="danger" data-a="del">Löschen</button></div>';
+      li.querySelector("[data-a=del]").onclick = function(){
+        if (confirm("Diese Reise nach " + e.ort + " wirklich löschen?")) {
+          eintraege = eintraege.filter(function(x){ return x.id !== e.id; });
+          speichern(); listeZeichnen(); pinsZeichnen();
+        }
+      };
+      var kb = li.querySelector("[data-a=karte]");
+      if (kb) kb.onclick = function(){
+        pinsZeichnen(e);
+        $("map").scrollIntoView({behavior:"smooth", block:"center"});
+      };
+      ul.appendChild(li);
+    });
+  }
+
+  function ortSuchen(name){
+    var url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=de&q=" + encodeURIComponent(name);
+    return fetch(url).then(function(r){ return r.json(); }).then(function(res){
+      return res && res[0] ? {lat: parseFloat(res[0].lat), lon: parseFloat(res[0].lon)} : null;
+    });
+  }
+
+  $("neu").onclick = function(){
+    $("form").hidden = false;
+    $("datum").value = new Date().toISOString().slice(0,10);
+    $("ort").focus();
+    $("form").scrollIntoView({behavior:"smooth", block:"start"});
+  };
+  $("abbrechen").onclick = function(){ $("form").hidden = true; $("form").reset(); $("status").textContent = ""; };
+
+  $("form").onsubmit = function(ev){
+    ev.preventDefault();
+    var e = {id: Date.now(), datum: $("datum").value, ort: $("ort").value.trim(), notiz: $("notiz").value.trim()};
+    if (!e.ort) return;
+    $("status").textContent = "Ort wird auf der Karte gesucht …";
+    ortSuchen(e.ort).then(function(pos){ return pos; }, function(){ return null; }).then(function(pos){
+      if (pos) { e.lat = pos.lat; e.lon = pos.lon; }
+      eintraege.push(e);
+      speichern(); listeZeichnen(); pinsZeichnen(pos ? e : null);
+      $("form").reset(); $("form").hidden = true;
+      $("status").textContent = "";
+      if (!pos) alert("Gespeichert. Der Ort wurde auf der Karte nicht gefunden, der Eintrag steht aber in der Liste.");
+    });
+  };
+
+  kartePrüfen();
+  listeZeichnen();
+  pinsZeichnen();
+})();
+</script>
+</body>
+</html>
