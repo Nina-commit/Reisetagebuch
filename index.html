@@ -28,6 +28,7 @@ form[hidden]{display:none}
 label{display:block;font-weight:bold;margin:.9rem 0 .25rem}
 input,textarea{font:inherit;width:100%;padding:.7rem;border:2px solid var(--line);border-radius:.6rem;background:var(--bg);color:var(--ink)}
 textarea{min-height:5.5rem;resize:vertical}
+#text{min-height:10rem}
 .dates{display:flex;gap:.6rem}.dates div{flex:1}
 .row{display:flex;gap:.6rem;margin-top:1rem}.row button{flex:1}
 .status{color:var(--muted);margin:.6rem 0 0;min-height:1.5rem}
@@ -50,7 +51,7 @@ details{margin-top:.6rem;color:var(--muted);font-size:.9rem}
 </header>
 <main>
   <div id="map" role="img" aria-label="Karte mit allen besuchten Orten"></div>
-  <p class="mapnote" id="mapnote">Dunkelblau: Flugroute. Gelb: Unterkunft.</p>
+  <p class="mapnote" id="mapnote">Jeder gelbe Punkt ist eine Unterkunft oder ein Ort.</p>
 
   <button class="primary" id="neu">Neue Reise eintragen</button>
 
@@ -60,23 +61,19 @@ details{margin-top:.6rem;color:var(--muted);font-size:.9rem}
       <div><label for="bis">Bis (kann leer bleiben)</label><input type="date" id="bis"></div>
     </div>
 
-    <label for="text">Erzähl kurz, was ihr gemacht habt</label>
-    <textarea id="text" placeholder="Flug Berlin-Helsinki-Rovaniemi, Unterkunft bei Ranua im Gulo Gulo, Besuch des Zoo, Hundeschlittenfahrt, Polarlicht"></textarea>
-    <p class="hint">Trenne die Teile mit Komma. Schreibe bei Flügen die Orte mit Bindestrich, und beginne mit „Flug“ oder „Unterkunft“.</p>
-    <button type="button" id="auswerten">Text auswerten</button>
+    <label for="text">Erlebnisse</label>
+    <textarea id="text" placeholder="Unterkunft bei Ranua im Gulo Gulo, Besuch des Zoo, Hundeschlittenfahrt, Polarlicht"></textarea>
+    <p class="hint">Dieser Text wird genau so gespeichert, wie du ihn schreibst. Wenn darin „Unterkunft bei Ranua im Gulo Gulo“ oder „Stadt Rovaniemi“ steht (Teile mit Komma trennen), findet die App die Orte für die Karte.</p>
+    <button type="button" id="auswerten">Orte aus dem Text finden</button>
 
-    <h3>Das habe ich erkannt. Bitte prüfen und ändern.</h3>
+    <h3>Orte für die Karte. Bitte prüfen und ändern.</h3>
     <label for="ort">Reiseziel (Überschrift)</label>
     <input type="text" id="ort" autocomplete="off">
-    <label for="route">Flug (Orte mit – getrennt)</label>
-    <input type="text" id="route" autocomplete="off" placeholder="Berlin – Helsinki – Rovaniemi">
-    <label for="stays">Unterkünfte (eine pro Zeile: Name | Ort)</label>
+    <label for="stays">Unterkünfte und Orte (eine pro Zeile: Name | Ort, oder nur der Ort)</label>
     <textarea id="stays" placeholder="Gulo Gulo | Ranua"></textarea>
-    <label for="acts">Erlebnisse (eines pro Zeile)</label>
-    <textarea id="acts"></textarea>
 
     <div class="row">
-      <button type="submit" class="primary">Speichern</button>
+      <button type="submit" class="primary" id="speichernKnopf">Speichern</button>
       <button type="button" id="abbrechen">Abbrechen</button>
     </div>
     <p class="status" id="status" role="status"></p>
@@ -98,13 +95,14 @@ function parseStay(p, last){
   return { name: name.trim(), ort: (ort || last || "").trim() };
 }
 function auswerten(text){
-  var r = { route: [], stays: [], acts: [], titel: "" }, lastOrt = "", lastType = "", m;
+  var r = { stays: [], acts: [], titel: "" }, lastOrt = "", lastType = "", m;
   text.split(/[,;\n]+/).forEach(function(seg){
     seg = seg.trim().replace(/[.!]+$/, "");
     if (!seg) return;
-    if ((m = seg.match(/^fl(?:ug|üge)(?:\s+von)?\s*:?\s*(.+)$/i))) {
-      r.route = m[1].split(/\s*(?:[-–—>→])\s*|\s+(?:nach|über)\s+/i).map(function(s){ return s.trim(); }).filter(Boolean);
-      lastType = "flug"; return;
+    if (/^fl(?:ug|üge)\b/i.test(seg)) { lastType = "flug"; return; }
+    if ((m = seg.match(/^(?:stadt|städte|ort|orte)\s*:?\s*(.+)$/i))) {
+      m[1].split(/\s+und\s+/i).forEach(function(c){ r.stays.push({name: "", ort: c.trim()}); lastOrt = c.trim(); });
+      lastType = "stay"; return;
     }
     var rest = null;
     if ((m = seg.match(/^(?:unterkunft|unterkünfte|übernachtung|übernachtungen)\s*:?\s*(.+)$/i))) rest = m[1];
@@ -120,7 +118,7 @@ function auswerten(text){
     seg.split(/\s+und\s+/i).forEach(function(a){ if (a.trim()) r.acts.push(cap(a.trim())); });
     lastType = "act";
   });
-  r.titel = r.route.length ? r.route[r.route.length - 1] : (r.stays[0] ? r.stays[0].ort : "");
+  r.titel = r.stays[0] ? r.stays[0].ort : "";
   return r;
 }
 // PARSER-END
@@ -164,7 +162,6 @@ function auswerten(text){
   }
   function punkte(e){
     var p = [];
-    (e.route || []).forEach(function(s){ if (s.pos) p.push([s.pos.lat, s.pos.lon]); });
     (e.stays || []).forEach(function(s){ if (s.pos) p.push([s.pos.lat, s.pos.lon]); });
     if (typeof e.lat === "number") p.push([e.lat, e.lon]);
     return p;
@@ -174,14 +171,6 @@ function auswerten(text){
     ebene.clearLayers();
     var alle = [];
     eintraege.forEach(function(e){
-      var linie = [];
-      (e.route || []).forEach(function(s){
-        if (!s.pos) return;
-        linie.push([s.pos.lat, s.pos.lon]);
-        L.circleMarker([s.pos.lat, s.pos.lon], {radius: 8, color: "#0e5a6b", fillColor: "#0e5a6b", fillOpacity: .9}).addTo(ebene)
-          .bindPopup("<b>" + esc(s.name) + "</b><br>" + esc(e.ort));
-      });
-      if (linie.length > 1) L.polyline(linie, {color: "#0e5a6b", weight: 3, dashArray: "6 8"}).addTo(ebene);
       (e.stays || []).forEach(function(s){
         if (!s.pos) return;
         L.circleMarker([s.pos.lat, s.pos.lon], {radius: 10, color: "#8a5a00", fillColor: "#f0b429", fillOpacity: 1}).addTo(ebene)
@@ -201,18 +190,15 @@ function auswerten(text){
     if (!eintraege.length) { ul.innerHTML = '<li class="empty">Noch keine Reise eingetragen. Tippe oben auf den Knopf.</li>'; return; }
     eintraege.slice().sort(function(a, b){ return b.datum.localeCompare(a.datum); }).forEach(function(e){
       var h = "<h2>" + esc(e.ort) + "</h2><time datetime='" + esc(e.datum) + "'>" + esc(zeitraum(e)) + "</time>";
-      if (e.route && e.route.length) h += "<p><b>Flug:</b> " + e.route.map(function(s){ return esc(s.name); }).join(" → ") + "</p>";
       if (e.stays && e.stays.length) h += "<p><b>Unterkunft:</b> " + e.stays.map(function(s){
         return esc(s.name || s.ort) + (s.name && s.ort ? " (" + esc(s.ort) + ")" : "");
       }).join("; ") + "</p>";
       if (e.acts && e.acts.length) h += "<p>" + e.acts.map(function(a){ return '<span class="chip">' + esc(a) + "</span>"; }).join("") + "</p>";
-      if (e.notiz) {
-        var strukturiert = (e.route && e.route.length) || (e.stays && e.stays.length) || (e.acts && e.acts.length);
-        h += strukturiert ? "<details><summary>Originaltext</summary>" + esc(e.notiz) + "</details>" : '<p style="white-space:pre-wrap">' + esc(e.notiz) + "</p>";
-      }
-      h += '<div class="actions">' + (punkte(e).length ? '<button data-a="karte">Auf Karte zeigen</button>' : "") + '<button class="danger" data-a="del">Löschen</button></div>';
+      if (e.notiz) h += '<p style="white-space:pre-wrap">' + esc(e.notiz) + "</p>";
+      h += '<div class="actions"><button data-a="edit">Bearbeiten</button>' + (punkte(e).length ? '<button data-a="karte">Auf Karte zeigen</button>' : "") + '<button class="danger" data-a="del">Löschen</button></div>';
       var li = document.createElement("li");
       li.innerHTML = h;
+      li.querySelector("[data-a=edit]").onclick = function(){ bearbeiten(e); };
       li.querySelector("[data-a=del]").onclick = function(){
         if (confirm("Die Reise „" + e.ort + "“ wirklich löschen?")) {
           eintraege = eintraege.filter(function(x){ return x.id !== e.id; });
@@ -227,9 +213,23 @@ function auswerten(text){
 
   /* ---------- Formular ---------- */
   function zeilen(id){ return $(id).value.split("\n").map(function(s){ return s.trim(); }).filter(Boolean); }
-  function formZuruecksetzen(){ $("form").reset(); $("form").hidden = true; $("status").textContent = ""; }
+  var bearbeitetId = null;
+  function formZuruecksetzen(){
+    $("form").reset(); $("form").hidden = true; $("status").textContent = "";
+    bearbeitetId = null; $("speichernKnopf").textContent = "Speichern";
+  }
+  function bearbeiten(e){
+    formZuruecksetzen();
+    bearbeitetId = e.id;
+    $("form").hidden = false;
+    $("datum").value = e.datum; $("bis").value = e.bis || ""; $("text").value = e.notiz || ""; $("ort").value = e.ort;
+    $("stays").value = (e.stays || []).map(function(s){ return s.name ? s.name + " | " + s.ort : s.ort; }).join("\n");
+    $("speichernKnopf").textContent = "Änderungen speichern";
+    $("form").scrollIntoView({behavior: "smooth", block: "start"});
+  }
 
   $("neu").onclick = function(){
+    formZuruecksetzen();
     $("form").hidden = false;
     $("datum").value = new Date().toISOString().slice(0, 10);
     $("text").focus();
@@ -239,41 +239,47 @@ function auswerten(text){
 
   $("auswerten").onclick = function(){
     var r = auswerten($("text").value);
-    $("route").value = r.route.join(" – ");
     $("stays").value = r.stays.map(function(s){ return s.name + " | " + s.ort; }).join("\n");
-    $("acts").value = r.acts.join("\n");
     if (!$("ort").value.trim()) $("ort").value = r.titel;
-    $("status").textContent = r.route.length + " Flugorte, " + r.stays.length + " Unterkünfte, " + r.acts.length + " Erlebnisse erkannt. Bitte unten prüfen.";
+    $("status").textContent = r.stays.length + " Unterkünfte/Orte erkannt. Bitte unten prüfen.";
     $("ort").scrollIntoView({behavior: "smooth", block: "center"});
   };
 
   $("form").onsubmit = async function(ev){
     ev.preventDefault();
+    var alt = null, bekannt = {};
+    eintraege.forEach(function(x){ if (x.id === bearbeitetId) alt = x; });
+    if (alt) (alt.stays || []).forEach(function(s){ if (s.pos) bekannt[s.name + "|" + s.ort] = s.pos; });
     var e = {
-      id: Date.now(), datum: $("datum").value, bis: $("bis").value, ort: $("ort").value.trim(), notiz: $("text").value.trim(),
-      route: $("route").value.split(/\s*[–—→>]\s*|\s-\s/).map(function(s){ return s.trim(); }).filter(Boolean).map(function(n){ return {name: n}; }),
-      stays: zeilen("stays").map(function(l){ var p = l.split("|"); return {name: p[0].trim(), ort: (p[1] || "").trim()}; }),
-      acts: zeilen("acts")
+      id: alt ? alt.id : Date.now(), datum: $("datum").value, bis: $("bis").value, ort: $("ort").value.trim(), notiz: $("text").value.trim(),
+      stays: zeilen("stays").map(function(l){ var p = l.split("|"); return p.length > 1 ? {name: p[0].trim(), ort: p[1].trim()} : {name: "", ort: l}; }),
+      acts: alt && alt.acts ? alt.acts : []
     };
-    if (!e.ort) e.ort = e.route.length ? e.route[e.route.length - 1].name : (e.stays[0] ? (e.stays[0].ort || e.stays[0].name) : "");
+    if (!e.ort) e.ort = e.stays[0] ? (e.stays[0].ort || e.stays[0].name) : "";
     if (!e.ort) { $("status").textContent = "Bitte ein Reiseziel eintragen."; $("ort").focus(); return; }
 
-    var gesamt = e.route.length + e.stays.length || 1, n = 0, vorher = "";
+    var vorher = "";
     try {
-      for (var i = 0; i < e.route.length; i++) { $("status").textContent = "Orte werden gesucht (" + (++n) + " von " + gesamt + ") …"; e.route[i].pos = await ersterTreffer([e.route[i].name]); }
       for (var j = 0; j < e.stays.length; j++) {
-        var s = e.stays[j];
-        $("status").textContent = "Orte werden gesucht (" + (++n) + " von " + gesamt + ") …";
-        s.pos = await ersterTreffer([(s.name + " " + s.ort).trim(), s.ort, vorher]);
+        var s = e.stays[j], k = s.name + "|" + s.ort;
+        if (bekannt[k]) { s.pos = bekannt[k]; }
+        else {
+          $("status").textContent = "Orte werden gesucht (" + (j + 1) + " von " + e.stays.length + ") …";
+          s.pos = await ersterTreffer([(s.name + " " + s.ort).trim(), s.ort, vorher]);
+        }
         if (s.ort) vorher = s.ort;
       }
-      if (!e.route.length && !e.stays.length) {
-        $("status").textContent = "Ort wird gesucht …";
-        var p = await ersterTreffer([e.ort]);
-        if (p) { e.lat = p.lat; e.lon = p.lon; }
+      if (!e.stays.length) {
+        if (alt && typeof alt.lat === "number" && alt.ort === e.ort) { e.lat = alt.lat; e.lon = alt.lon; }
+        else {
+          $("status").textContent = "Ort wird gesucht …";
+          var p = await ersterTreffer([e.ort]);
+          if (p) { e.lat = p.lat; e.lon = p.lon; }
+        }
       }
     } catch(err){}
-    eintraege.push(e);
+    if (alt) eintraege = eintraege.map(function(x){ return x.id === e.id ? e : x; });
+    else eintraege.push(e);
     speichern(); listeZeichnen(); pinsZeichnen(e);
     var fehlt = punkte(e).length === 0;
     formZuruecksetzen();
