@@ -14,22 +14,28 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:Charter,"Bitstre
 header,main{max-width:42rem;margin:0 auto;padding:0 1rem}
 header{padding-top:1.2rem}
 h1{font-size:2rem;margin:0;line-height:1.15}
-h3{font-size:1.1rem;margin:1.4rem 0 .2rem}
 header p{margin:.2rem 0 0;color:var(--muted)}
 main{padding-bottom:3rem}
 #map{height:16rem;border-radius:.8rem;border:2px solid var(--line);margin:.8rem 0;background:var(--card)}
+.flugicon{background:none;border:none;font-size:24px;line-height:28px;text-align:center}
 .mapnote,.hint{color:var(--muted);font-size:.85rem;margin:.2rem 0 .8rem}
 button{font:inherit;cursor:pointer;border-radius:.7rem;border:2px solid var(--main);padding:.8rem 1.2rem;min-height:3.2rem;background:transparent;color:var(--main)}
 button.primary{background:var(--main);color:var(--main-ink);font-weight:bold;width:100%;font-size:1.15rem}
 button.danger{color:var(--danger);border-color:var(--danger)}
-button:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible{outline:4px solid var(--sun);outline-offset:2px}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:4px solid var(--sun);outline-offset:2px}
 form{background:var(--card);border:2px solid var(--line);border-radius:.8rem;padding:1rem;margin:.8rem 0}
 form[hidden]{display:none}
 label{display:block;font-weight:bold;margin:.9rem 0 .25rem}
-input,textarea{font:inherit;width:100%;padding:.7rem;border:2px solid var(--line);border-radius:.6rem;background:var(--bg);color:var(--ink)}
-textarea{min-height:5.5rem;resize:vertical}
-#text{min-height:10rem}
+input[type=text],input[type=date],textarea{font:inherit;width:100%;padding:.7rem;border:2px solid var(--line);border-radius:.6rem;background:var(--bg);color:var(--ink)}
+textarea{min-height:6rem;resize:vertical}
+#notiz{min-height:9rem}
 .dates{display:flex;gap:.6rem}.dates div{flex:1}
+.typen{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+.typ{position:relative;margin:0;font-weight:normal}
+.typ input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.typ span{display:block;text-align:center;padding:.8rem .4rem;min-height:3.2rem;border:2px solid var(--line);border-radius:.7rem;background:var(--bg)}
+.typ input:checked+span{border-color:var(--main);background:var(--main);color:var(--main-ink);font-weight:bold}
+.typ input:focus-visible+span{outline:4px solid var(--sun);outline-offset:2px}
 .row{display:flex;gap:.6rem;margin-top:1rem}.row button{flex:1}
 .status{color:var(--muted);margin:.6rem 0 0;min-height:1.5rem}
 ul{list-style:none;padding:0;margin:1.2rem 0 0}
@@ -37,8 +43,6 @@ li{background:var(--card);border:2px solid var(--line);border-left:8px solid var
 li h2{font-size:1.35rem;margin:0}
 li time{color:var(--muted);display:block}
 li p{margin:.5rem 0 0}
-.chip{display:inline-block;background:var(--bg);border:1px solid var(--line);border-radius:1rem;padding:.05rem .7rem;margin:.25rem .3rem 0 0;font-size:.9rem}
-details{margin-top:.6rem;color:var(--muted);font-size:.9rem}
 .actions{display:flex;gap:.5rem;margin-top:.8rem}
 .actions button{padding:.4rem .9rem;min-height:2.6rem;font-size:.9rem}
 .empty{color:var(--muted);text-align:center;padding:1.5rem 0}
@@ -51,7 +55,7 @@ details{margin-top:.6rem;color:var(--muted);font-size:.9rem}
 </header>
 <main>
   <div id="map" role="img" aria-label="Karte mit allen besuchten Orten"></div>
-  <p class="mapnote" id="mapnote">Jeder gelbe Punkt ist eine Unterkunft oder ein Ort.</p>
+  <p class="mapnote" id="mapnote">✈️ = Flugreise. Linien: blau = Auto, orange = Bus, grün = Fahrrad.</p>
 
   <button class="primary" id="neu">Neue Reise eintragen</button>
 
@@ -61,16 +65,23 @@ details{margin-top:.6rem;color:var(--muted);font-size:.9rem}
       <div><label for="bis">Bis (kann leer bleiben)</label><input type="date" id="bis"></div>
     </div>
 
-    <label for="text">Erlebnisse</label>
-    <textarea id="text" placeholder="Unterkunft bei Ranua im Gulo Gulo, Besuch des Zoo, Hundeschlittenfahrt, Polarlicht"></textarea>
-    <p class="hint">Dieser Text wird genau so gespeichert, wie du ihn schreibst. Wenn darin „Unterkunft bei Ranua im Gulo Gulo“ oder „Stadt Rovaniemi“ steht (Teile mit Komma trennen), findet die App die Orte für die Karte.</p>
-    <button type="button" id="auswerten">Orte aus dem Text finden</button>
+    <label>Wie sind wir gereist?</label>
+    <div class="typen">
+      <label class="typ"><input type="radio" name="typ" value="flug" required><span>✈️ Flugreise</span></label>
+      <label class="typ"><input type="radio" name="typ" value="auto"><span>🚗 Auto</span></label>
+      <label class="typ"><input type="radio" name="typ" value="bus"><span>🚌 Bus</span></label>
+      <label class="typ"><input type="radio" name="typ" value="rad"><span>🚲 Fahrrad</span></label>
+    </div>
 
-    <h3>Orte für die Karte. Bitte prüfen und ändern.</h3>
-    <label for="ort">Reiseziel (Überschrift)</label>
-    <input type="text" id="ort" autocomplete="off">
-    <label for="stays">Unterkünfte und Orte (eine pro Zeile: Name | Ort, oder nur der Ort)</label>
-    <textarea id="stays" placeholder="Gulo Gulo | Ranua"></textarea>
+    <label for="titel">Überschrift (kann leer bleiben)</label>
+    <input type="text" id="titel" autocomplete="off" placeholder="zum Beispiel Lappland im Winter">
+
+    <label for="orte">Orte (einer pro Zeile, in der Reihenfolge der Reise)</label>
+    <textarea id="orte" placeholder="Berlin&#10;Helsinki&#10;Rovaniemi"></textarea>
+    <p class="hint">Flugreise: Jeder Ort bekommt ein Flugzeug. Auto, Bus, Fahrrad: Die Orte werden der Reihe nach mit einer Linie verbunden. Bei Orten mit gleichem Namen hilft das Land, zum Beispiel „Rovaniemi, Finnland“.</p>
+
+    <label for="notiz">Notizen</label>
+    <textarea id="notiz"></textarea>
 
     <div class="row">
       <button type="submit" class="primary" id="speichernKnopf">Speichern</button>
@@ -84,51 +95,27 @@ details{margin-top:.6rem;color:var(--muted);font-size:.9rem}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script>
-// PARSER-START
-function cap(s){ return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
-function parseStay(p, last){
-  var name = "", ort = "", m;
-  if ((m = p.match(/^(?:bei|nahe|in der Nähe von)\s+(.+?)\s+(?:im|in der|in den|in|am|an der)\s+(.+)$/i))) { ort = m[1]; name = m[2]; }
-  else if ((m = p.match(/^(?:(?:in|im)\s+)?(.+?)\s+(?:am|an der|beim|bei|nahe)\s+(.+)$/i))) { name = m[1]; ort = m[2]; }
-  else if ((m = p.match(/^(?:bei|in|im)\s+(.+)$/i))) { ort = m[1]; }
-  else { name = p; }
-  return { name: name.trim(), ort: (ort || last || "").trim() };
-}
-function auswerten(text){
-  var r = { stays: [], acts: [], titel: "" }, lastOrt = "", lastType = "", m;
-  text.split(/[,;\n]+/).forEach(function(seg){
-    seg = seg.trim().replace(/[.!]+$/, "");
-    if (!seg) return;
-    if (/^fl(?:ug|üge)\b/i.test(seg)) { lastType = "flug"; return; }
-    if ((m = seg.match(/^(?:stadt|städte|ort|orte)\s*:?\s*(.+)$/i))) {
-      m[1].split(/\s+und\s+/i).forEach(function(c){ r.stays.push({name: "", ort: c.trim()}); lastOrt = c.trim(); });
-      lastType = "stay"; return;
-    }
-    var rest = null;
-    if ((m = seg.match(/^(?:unterkunft|unterkünfte|übernachtung|übernachtungen)\s*:?\s*(.+)$/i))) rest = m[1];
-    else if (lastType === "stay" && (m = seg.match(/^(?:später|danach|dann|anschließend)\s+(.+)$/i))) rest = m[1];
-    if (rest !== null) {
-      rest.split(/\s+(?:später|danach|dann|anschließend|und dann)\s+/i).forEach(function(part){
-        var s = parseStay(part.trim(), lastOrt);
-        if (s.ort) lastOrt = s.ort;
-        r.stays.push(s);
-      });
-      lastType = "stay"; return;
-    }
-    seg.split(/\s+und\s+/i).forEach(function(a){ if (a.trim()) r.acts.push(cap(a.trim())); });
-    lastType = "act";
-  });
-  r.titel = r.stays[0] ? r.stays[0].ort : "";
-  return r;
-}
-// PARSER-END
-
 (function(){
   var KEY = "reisetagebuch-v1";
+  var TYPEN = {
+    flug: {icon: "✈️", name: "Flugreise", color: "#0e5a6b"},
+    auto: {icon: "🚗", name: "Auto", color: "#1d4ed8"},
+    bus:  {icon: "🚌", name: "Bus", color: "#c2410c"},
+    rad:  {icon: "🚲", name: "Fahrrad", color: "#2f7d32"}
+  };
   var $ = function(id){ return document.getElementById(id); };
-  var eintraege = laden(), map = null, ebene = null, cache = {};
+  var eintraege = laden(), map = null, ebene = null, cache = {}, bearbeitetId = null;
 
-  function laden(){ try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch(e){ return []; } }
+  function laden(){
+    var l; try { l = JSON.parse(localStorage.getItem(KEY)) || []; } catch(e){ l = []; }
+    l.forEach(function(e){            // ältere Einträge übernehmen
+      if (!e.orte) {
+        e.orte = (e.stays || []).map(function(s){ return {name: s.ort || s.name, pos: s.pos}; });
+        if (!e.orte.length && typeof e.lat === "number") e.orte = [{name: e.ort, pos: {lat: e.lat, lon: e.lon}}];
+      }
+    });
+    return l;
+  }
   function speichern(){ try { localStorage.setItem(KEY, JSON.stringify(eintraege)); } catch(e){} }
   function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
   function fmt(iso){
@@ -148,10 +135,6 @@ function auswerten(text){
         cache[q] = p; return p;
       }, function(){ return null; });
   }
-  async function ersterTreffer(qs){
-    for (var i = 0; i < qs.length; i++) { if (!qs[i]) continue; var p = await suche(qs[i]); if (p) return p; }
-    return null;
-  }
 
   /* ---------- Karte ---------- */
   function karteStarten(){
@@ -162,8 +145,7 @@ function auswerten(text){
   }
   function punkte(e){
     var p = [];
-    (e.stays || []).forEach(function(s){ if (s.pos) p.push([s.pos.lat, s.pos.lon]); });
-    if (typeof e.lat === "number") p.push([e.lat, e.lon]);
+    (e.orte || []).forEach(function(o){ if (o.pos) p.push([o.pos.lat, o.pos.lon]); });
     return p;
   }
   function pinsZeichnen(fokus){
@@ -171,13 +153,17 @@ function auswerten(text){
     ebene.clearLayers();
     var alle = [];
     eintraege.forEach(function(e){
-      (e.stays || []).forEach(function(s){
-        if (!s.pos) return;
-        L.circleMarker([s.pos.lat, s.pos.lon], {radius: 10, color: "#8a5a00", fillColor: "#f0b429", fillOpacity: 1}).addTo(ebene)
-          .bindPopup("<b>" + esc(s.name || s.ort) + "</b><br>" + esc(s.ort));
+      var t = TYPEN[e.typ], farbe = t ? t.color : "#b7791f", linie = [];
+      (e.orte || []).forEach(function(o){
+        if (!o.pos) return;
+        var ll = [o.pos.lat, o.pos.lon], m;
+        linie.push(ll);
+        if (e.typ === "flug") m = L.marker(ll, {icon: L.divIcon({className: "flugicon", html: "✈️", iconSize: [28, 28], iconAnchor: [14, 14]})});
+        else m = L.circleMarker(ll, {radius: 8, color: "#fff", weight: 2, fillColor: farbe, fillOpacity: 1});
+        m.addTo(ebene).bindPopup("<b>" + esc(o.name) + "</b><br>" + esc(e.ort) + (t ? " (" + t.name + ")" : ""));
       });
-      if (typeof e.lat === "number") L.marker([e.lat, e.lon]).addTo(ebene).bindPopup("<b>" + esc(e.ort) + "</b><br>" + esc(zeitraum(e)));
-      alle = alle.concat(punkte(e));
+      if (t && e.typ !== "flug" && linie.length > 1) L.polyline(linie, {color: farbe, weight: 4, opacity: .85}).addTo(ebene);
+      alle = alle.concat(linie);
     });
     var ziel = fokus ? punkte(fokus) : alle;
     if (ziel.length) map.fitBounds(ziel, {padding: [30, 30], maxZoom: fokus ? 9 : 7});
@@ -189,11 +175,9 @@ function auswerten(text){
     ul.innerHTML = "";
     if (!eintraege.length) { ul.innerHTML = '<li class="empty">Noch keine Reise eingetragen. Tippe oben auf den Knopf.</li>'; return; }
     eintraege.slice().sort(function(a, b){ return b.datum.localeCompare(a.datum); }).forEach(function(e){
-      var h = "<h2>" + esc(e.ort) + "</h2><time datetime='" + esc(e.datum) + "'>" + esc(zeitraum(e)) + "</time>";
-      if (e.stays && e.stays.length) h += "<p><b>Unterkunft:</b> " + e.stays.map(function(s){
-        return esc(s.name || s.ort) + (s.name && s.ort ? " (" + esc(s.ort) + ")" : "");
-      }).join("; ") + "</p>";
-      if (e.acts && e.acts.length) h += "<p>" + e.acts.map(function(a){ return '<span class="chip">' + esc(a) + "</span>"; }).join("") + "</p>";
+      var t = TYPEN[e.typ];
+      var h = "<h2>" + (t ? t.icon + " " : "") + esc(e.ort) + "</h2><time datetime='" + esc(e.datum) + "'>" + esc(zeitraum(e)) + (t ? " · " + t.name : "") + "</time>";
+      if (e.orte && e.orte.length) h += "<p><b>Orte:</b> " + e.orte.map(function(o){ return esc(o.name); }).join(e.typ === "flug" || !e.typ ? ", " : " → ") + "</p>";
       if (e.notiz) h += '<p style="white-space:pre-wrap">' + esc(e.notiz) + "</p>";
       h += '<div class="actions"><button data-a="edit">Bearbeiten</button>' + (punkte(e).length ? '<button data-a="karte">Auf Karte zeigen</button>' : "") + '<button class="danger" data-a="del">Löschen</button></div>';
       var li = document.createElement("li");
@@ -213,7 +197,6 @@ function auswerten(text){
 
   /* ---------- Formular ---------- */
   function zeilen(id){ return $(id).value.split("\n").map(function(s){ return s.trim(); }).filter(Boolean); }
-  var bearbeitetId = null;
   function formZuruecksetzen(){
     $("form").reset(); $("form").hidden = true; $("status").textContent = "";
     bearbeitetId = null; $("speichernKnopf").textContent = "Speichern";
@@ -222,8 +205,10 @@ function auswerten(text){
     formZuruecksetzen();
     bearbeitetId = e.id;
     $("form").hidden = false;
-    $("datum").value = e.datum; $("bis").value = e.bis || ""; $("text").value = e.notiz || ""; $("ort").value = e.ort;
-    $("stays").value = (e.stays || []).map(function(s){ return s.name ? s.name + " | " + s.ort : s.ort; }).join("\n");
+    $("datum").value = e.datum; $("bis").value = e.bis || ""; $("titel").value = e.ort; $("notiz").value = e.notiz || "";
+    $("orte").value = (e.orte || []).map(function(o){ return o.name; }).join("\n");
+    var r = document.querySelector("input[name=typ][value='" + (e.typ || "") + "']");
+    if (r) r.checked = true;
     $("speichernKnopf").textContent = "Änderungen speichern";
     $("form").scrollIntoView({behavior: "smooth", block: "start"});
   }
@@ -232,58 +217,41 @@ function auswerten(text){
     formZuruecksetzen();
     $("form").hidden = false;
     $("datum").value = new Date().toISOString().slice(0, 10);
-    $("text").focus();
     $("form").scrollIntoView({behavior: "smooth", block: "start"});
   };
   $("abbrechen").onclick = formZuruecksetzen;
-
-  $("auswerten").onclick = function(){
-    var r = auswerten($("text").value);
-    $("stays").value = r.stays.map(function(s){ return s.name + " | " + s.ort; }).join("\n");
-    if (!$("ort").value.trim()) $("ort").value = r.titel;
-    $("status").textContent = r.stays.length + " Unterkünfte/Orte erkannt. Bitte unten prüfen.";
-    $("ort").scrollIntoView({behavior: "smooth", block: "center"});
-  };
 
   $("form").onsubmit = async function(ev){
     ev.preventDefault();
     var alt = null, bekannt = {};
     eintraege.forEach(function(x){ if (x.id === bearbeitetId) alt = x; });
-    if (alt) (alt.stays || []).forEach(function(s){ if (s.pos) bekannt[s.name + "|" + s.ort] = s.pos; });
+    if (alt) (alt.orte || []).forEach(function(o){ if (o.pos) bekannt[o.name] = o.pos; });
+    var typ = document.querySelector("input[name=typ]:checked");
     var e = {
-      id: alt ? alt.id : Date.now(), datum: $("datum").value, bis: $("bis").value, ort: $("ort").value.trim(), notiz: $("text").value.trim(),
-      stays: zeilen("stays").map(function(l){ var p = l.split("|"); return p.length > 1 ? {name: p[0].trim(), ort: p[1].trim()} : {name: "", ort: l}; }),
-      acts: alt && alt.acts ? alt.acts : []
+      id: alt ? alt.id : Date.now(), datum: $("datum").value, bis: $("bis").value, typ: typ ? typ.value : "",
+      ort: $("titel").value.trim(), notiz: $("notiz").value.trim(),
+      orte: zeilen("orte").map(function(n){ return {name: n}; })
     };
-    if (!e.ort) e.ort = e.stays[0] ? (e.stays[0].ort || e.stays[0].name) : "";
-    if (!e.ort) { $("status").textContent = "Bitte ein Reiseziel eintragen."; $("ort").focus(); return; }
+    if (!e.ort) e.ort = e.orte.length > 1 ? e.orte[0].name + " – " + e.orte[e.orte.length - 1].name : (e.orte[0] ? e.orte[0].name : "");
+    if (!e.ort) { $("status").textContent = "Bitte eine Überschrift oder mindestens einen Ort eintragen."; $("titel").focus(); return; }
 
-    var vorher = "";
+    var fehlt = [];
     try {
-      for (var j = 0; j < e.stays.length; j++) {
-        var s = e.stays[j], k = s.name + "|" + s.ort;
-        if (bekannt[k]) { s.pos = bekannt[k]; }
+      for (var i = 0; i < e.orte.length; i++) {
+        var o = e.orte[i];
+        if (bekannt[o.name]) o.pos = bekannt[o.name];
         else {
-          $("status").textContent = "Orte werden gesucht (" + (j + 1) + " von " + e.stays.length + ") …";
-          s.pos = await ersterTreffer([(s.name + " " + s.ort).trim(), s.ort, vorher]);
+          $("status").textContent = "Orte werden gesucht (" + (i + 1) + " von " + e.orte.length + ") …";
+          o.pos = await suche(o.name);
         }
-        if (s.ort) vorher = s.ort;
-      }
-      if (!e.stays.length) {
-        if (alt && typeof alt.lat === "number" && alt.ort === e.ort) { e.lat = alt.lat; e.lon = alt.lon; }
-        else {
-          $("status").textContent = "Ort wird gesucht …";
-          var p = await ersterTreffer([e.ort]);
-          if (p) { e.lat = p.lat; e.lon = p.lon; }
-        }
+        if (!o.pos) fehlt.push(o.name);
       }
     } catch(err){}
     if (alt) eintraege = eintraege.map(function(x){ return x.id === e.id ? e : x; });
     else eintraege.push(e);
     speichern(); listeZeichnen(); pinsZeichnen(e);
-    var fehlt = punkte(e).length === 0;
     formZuruecksetzen();
-    if (fehlt) alert("Gespeichert. Die Orte wurden auf der Karte nicht gefunden. Der Eintrag steht aber in der Liste.");
+    if (fehlt.length) alert("Gespeichert. Diese Orte wurden auf der Karte nicht gefunden: " + fehlt.join(", ") + ".\n\nTippe beim Eintrag auf „Bearbeiten“ und schreibe den Ort genauer, zum Beispiel mit dem Land.");
   };
 
   karteStarten();
