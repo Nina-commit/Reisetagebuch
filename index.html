@@ -30,7 +30,7 @@ input[type=text],input[type=date],textarea{font:inherit;width:100%;padding:.7rem
 textarea{min-height:6rem;resize:vertical}
 #notiz{min-height:9rem}
 .dates{display:flex;gap:.6rem}.dates div{flex:1}
-.typen{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+.typen{display:grid;grid-template-columns:repeat(3,1fr);gap:.6rem}
 .typ{position:relative;margin:0;font-weight:normal}
 .typ input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
 .typ span{display:block;text-align:center;padding:.8rem .4rem;min-height:3.2rem;border:2px solid var(--line);border-radius:.7rem;background:var(--bg)}
@@ -55,7 +55,7 @@ li p{margin:.5rem 0 0}
 </header>
 <main>
   <div id="map" role="img" aria-label="Karte mit allen besuchten Orten"></div>
-  <p class="mapnote" id="mapnote">✈️ = Flugreise. Linien: blau = Auto, orange = Bus, grün = Fahrrad.</p>
+  <p class="mapnote" id="mapnote">✈️ = dorthin geflogen. Linien: blau = Auto, orange = Bus, grün = Fahrrad.</p>
 
   <button class="primary" id="neu">Neue Reise eintragen</button>
 
@@ -67,18 +67,17 @@ li p{margin:.5rem 0 0}
 
     <label>Wie sind wir gereist?</label>
     <div class="typen">
-      <label class="typ"><input type="radio" name="typ" value="flug" required><span>✈️ Flugreise</span></label>
-      <label class="typ"><input type="radio" name="typ" value="auto"><span>🚗 Auto</span></label>
-      <label class="typ"><input type="radio" name="typ" value="bus"><span>🚌 Bus</span></label>
-      <label class="typ"><input type="radio" name="typ" value="rad"><span>🚲 Fahrrad</span></label>
+      <label class="typ"><input type="radio" name="typ" value="auto" required><span>🚗<br>Auto</span></label>
+      <label class="typ"><input type="radio" name="typ" value="bus"><span>🚌<br>Bus</span></label>
+      <label class="typ"><input type="radio" name="typ" value="rad"><span>🚲<br>Fahrrad</span></label>
     </div>
 
     <label for="titel">Überschrift (kann leer bleiben)</label>
     <input type="text" id="titel" autocomplete="off" placeholder="zum Beispiel Lappland im Winter">
 
     <label for="orte">Orte (einer pro Zeile, in der Reihenfolge der Reise)</label>
-    <textarea id="orte" placeholder="Berlin&#10;Helsinki&#10;Rovaniemi"></textarea>
-    <p class="hint">Flugreise: Jeder Ort bekommt ein Flugzeug. Auto, Bus, Fahrrad: Die Orte werden der Reihe nach mit einer Linie verbunden. Bei Orten mit gleichem Namen hilft das Land, zum Beispiel „Rovaniemi, Finnland“.</p>
+    <textarea id="orte" placeholder="Berlin&#10;Helsinki (F)&#10;Rovaniemi"></textarea>
+    <p class="hint">Die Orte werden der Reihe nach mit einer Linie verbunden, in der Farbe der gewählten Reiseart. Schreibe (F) hinter einen Ort, an den ihr geflogen seid, zum Beispiel „Helsinki (F)“: Er bekommt ein Flugzeug und die Linie dorthin entfällt. Von dort geht es mit Linie weiter. Bei Orten mit gleichem Namen hilft das Land, zum Beispiel „Rovaniemi, Finnland“.</p>
 
     <label for="notiz">Notizen</label>
     <textarea id="notiz"></textarea>
@@ -98,7 +97,6 @@ li p{margin:.5rem 0 0}
 (function(){
   var KEY = "reisetagebuch-v1";
   var TYPEN = {
-    flug: {icon: "✈️", name: "Flugreise", color: "#0e5a6b"},
     auto: {icon: "🚗", name: "Auto", color: "#1d4ed8"},
     bus:  {icon: "🚌", name: "Bus", color: "#c2410c"},
     rad:  {icon: "🚲", name: "Fahrrad", color: "#2f7d32"}
@@ -113,6 +111,7 @@ li p{margin:.5rem 0 0}
         e.orte = (e.stays || []).map(function(s){ return {name: s.ort || s.name, pos: s.pos}; });
         if (!e.orte.length && typeof e.lat === "number") e.orte = [{name: e.ort, pos: {lat: e.lat, lon: e.lon}}];
       }
+      if (e.typ === "flug") { e.orte.forEach(function(o){ o.flug = true; }); e.typ = ""; }
     });
     return l;
   }
@@ -153,17 +152,23 @@ li p{margin:.5rem 0 0}
     ebene.clearLayers();
     var alle = [];
     eintraege.forEach(function(e){
-      var t = TYPEN[e.typ], farbe = t ? t.color : "#b7791f", linie = [];
+      var t = TYPEN[e.typ], farbe = t ? t.color : "#b7791f", punktliste = [], strecke = [];
+      function strichZiehen(){ if (t && strecke.length > 1) L.polyline(strecke, {color: farbe, weight: 4, opacity: .85}).addTo(ebene); }
       (e.orte || []).forEach(function(o){
         if (!o.pos) return;
         var ll = [o.pos.lat, o.pos.lon], m;
-        linie.push(ll);
-        if (e.typ === "flug") m = L.marker(ll, {icon: L.divIcon({className: "flugicon", html: "✈️", iconSize: [28, 28], iconAnchor: [14, 14]})});
-        else m = L.circleMarker(ll, {radius: 8, color: "#fff", weight: 2, fillColor: farbe, fillOpacity: 1});
+        if (o.flug) {
+          strichZiehen(); strecke = [ll];
+          m = L.marker(ll, {icon: L.divIcon({className: "flugicon", html: "✈️", iconSize: [28, 28], iconAnchor: [14, 14]})});
+        } else {
+          strecke.push(ll);
+          m = L.circleMarker(ll, {radius: 8, color: "#fff", weight: 2, fillColor: farbe, fillOpacity: 1});
+        }
+        punktliste.push(ll);
         m.addTo(ebene).bindPopup("<b>" + esc(o.name) + "</b><br>" + esc(e.ort) + (t ? " (" + t.name + ")" : ""));
       });
-      if (t && e.typ !== "flug" && linie.length > 1) L.polyline(linie, {color: farbe, weight: 4, opacity: .85}).addTo(ebene);
-      alle = alle.concat(linie);
+      strichZiehen();
+      alle = alle.concat(punktliste);
     });
     var ziel = fokus ? punkte(fokus) : alle;
     if (ziel.length) map.fitBounds(ziel, {padding: [30, 30], maxZoom: fokus ? 9 : 7});
@@ -177,7 +182,7 @@ li p{margin:.5rem 0 0}
     eintraege.slice().sort(function(a, b){ return b.datum.localeCompare(a.datum); }).forEach(function(e){
       var t = TYPEN[e.typ];
       var h = "<h2>" + (t ? t.icon + " " : "") + esc(e.ort) + "</h2><time datetime='" + esc(e.datum) + "'>" + esc(zeitraum(e)) + (t ? " · " + t.name : "") + "</time>";
-      if (e.orte && e.orte.length) h += "<p><b>Orte:</b> " + e.orte.map(function(o){ return esc(o.name); }).join(e.typ === "flug" || !e.typ ? ", " : " → ") + "</p>";
+      if (e.orte && e.orte.length) h += "<p><b>Orte:</b> " + e.orte.map(function(o){ return esc(o.name) + (o.flug ? " ✈️" : ""); }).join(t ? " → " : ", ") + "</p>";
       if (e.notiz) h += '<p style="white-space:pre-wrap">' + esc(e.notiz) + "</p>";
       h += '<div class="actions"><button data-a="edit">Bearbeiten</button>' + (punkte(e).length ? '<button data-a="karte">Auf Karte zeigen</button>' : "") + '<button class="danger" data-a="del">Löschen</button></div>';
       var li = document.createElement("li");
@@ -206,7 +211,7 @@ li p{margin:.5rem 0 0}
     bearbeitetId = e.id;
     $("form").hidden = false;
     $("datum").value = e.datum; $("bis").value = e.bis || ""; $("titel").value = e.ort; $("notiz").value = e.notiz || "";
-    $("orte").value = (e.orte || []).map(function(o){ return o.name; }).join("\n");
+    $("orte").value = (e.orte || []).map(function(o){ return o.name + (o.flug ? " (F)" : ""); }).join("\n");
     var r = document.querySelector("input[name=typ][value='" + (e.typ || "") + "']");
     if (r) r.checked = true;
     $("speichernKnopf").textContent = "Änderungen speichern";
@@ -230,7 +235,10 @@ li p{margin:.5rem 0 0}
     var e = {
       id: alt ? alt.id : Date.now(), datum: $("datum").value, bis: $("bis").value, typ: typ ? typ.value : "",
       ort: $("titel").value.trim(), notiz: $("notiz").value.trim(),
-      orte: zeilen("orte").map(function(n){ return {name: n}; })
+      orte: zeilen("orte").map(function(n){
+        var f = /\s*\(f\)\s*$/i.test(n);
+        return {name: n.replace(/\s*\(f\)\s*$/i, "").trim(), flug: f};
+      }).filter(function(o){ return o.name; })
     };
     if (!e.ort) e.ort = e.orte.length > 1 ? e.orte[0].name + " – " + e.orte[e.orte.length - 1].name : (e.orte[0] ? e.orte[0].name : "");
     if (!e.ort) { $("status").textContent = "Bitte eine Überschrift oder mindestens einen Ort eintragen."; $("titel").focus(); return; }
