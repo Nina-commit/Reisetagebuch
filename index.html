@@ -17,7 +17,6 @@ h1{font-size:2rem;margin:0;line-height:1.15}
 header p{margin:.2rem 0 0;color:var(--muted)}
 main{padding-bottom:3rem}
 #map{height:16rem;border-radius:.8rem;border:2px solid var(--line);margin:.8rem 0;background:var(--card)}
-.flugicon{background:none;border:none;font-size:24px;line-height:28px;text-align:center}
 .mapnote,.hint{color:var(--muted);font-size:.85rem;margin:.2rem 0 .8rem}
 button{font:inherit;cursor:pointer;border-radius:.7rem;border:2px solid var(--main);padding:.8rem 1.2rem;min-height:3.2rem;background:transparent;color:var(--main)}
 button.primary{background:var(--main);color:var(--main-ink);font-weight:bold;width:100%;font-size:1.15rem}
@@ -26,7 +25,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:4px soli
 form{background:var(--card);border:2px solid var(--line);border-radius:.8rem;padding:1rem;margin:.8rem 0}
 form[hidden]{display:none}
 label{display:block;font-weight:bold;margin:.9rem 0 .25rem}
-input[type=text],input[type=date],textarea{font:inherit;width:100%;padding:.7rem;border:2px solid var(--line);border-radius:.6rem;background:var(--bg);color:var(--ink)}
+input[type=text],input[type=date],input[type=search],textarea{font:inherit;width:100%;padding:.7rem;border:2px solid var(--line);border-radius:.6rem;background:var(--bg);color:var(--ink)}
 textarea{min-height:6rem;resize:vertical}
 #notiz{min-height:9rem}
 .dates{display:flex;gap:.6rem}.dates div{flex:1}
@@ -54,10 +53,15 @@ li p{margin:.5rem 0 0}
   <p>Wo wir waren und was wir erlebt haben.</p>
 </header>
 <main>
+  <label for="suche" style="margin-top:0">Suchen</label>
+  <input type="search" id="suche" placeholder="Stichwort, Ort, Land oder Datum" autocomplete="off">
+  <p class="hint" id="treffer">Zum Beispiel: Finnland, Hundeschlitten, 2026 oder März 2026.</p>
+
   <div id="map" role="img" aria-label="Karte mit allen besuchten Orten"></div>
-  <p class="mapnote" id="mapnote">✈️ = dorthin geflogen. Linien: blau = Auto, orange = Bus, grün = Fahrrad.</p>
+  <p class="mapnote" id="mapnote">Blauer Punkt = dorthin geflogen. Linien: rot = Auto, orange = Bus, grün = Fahrrad.</p>
 
   <button class="primary" id="neu">Neue Reise eintragen</button>
+  <button id="download" style="width:100%;margin-top:.6rem">Download (Tabelle)</button>
 
   <form id="form" hidden>
     <div class="dates">
@@ -77,7 +81,7 @@ li p{margin:.5rem 0 0}
 
     <label for="orte">Orte (einer pro Zeile, in der Reihenfolge der Reise)</label>
     <textarea id="orte" placeholder="Berlin&#10;Helsinki (F)&#10;Rovaniemi"></textarea>
-    <p class="hint">Die Orte werden der Reihe nach mit einer Linie verbunden, in der Farbe der gewählten Reiseart. Schreibe (F) hinter einen Ort, an den ihr geflogen seid, zum Beispiel „Helsinki (F)“: Er bekommt ein Flugzeug und die Linie dorthin entfällt. Von dort geht es mit Linie weiter. Bei Orten mit gleichem Namen hilft das Land, zum Beispiel „Rovaniemi, Finnland“.</p>
+    <p class="hint">Die Orte werden der Reihe nach mit einer Linie verbunden, in der Farbe der gewählten Reiseart. Schreibe (F) hinter einen Ort, an den ihr geflogen seid, zum Beispiel „Helsinki (F)“: Er bekommt einen blauen Punkt und die Linie dorthin entfällt. Von dort geht es mit Linie weiter. Bei Orten mit gleichem Namen hilft das Land, zum Beispiel „Rovaniemi, Finnland“.</p>
 
     <label for="notiz">Notizen</label>
     <textarea id="notiz"></textarea>
@@ -97,7 +101,7 @@ li p{margin:.5rem 0 0}
 (function(){
   var KEY = "reisetagebuch-v1";
   var TYPEN = {
-    auto: {icon: "🚗", name: "Auto", color: "#1d4ed8"},
+    auto: {icon: "🚗", name: "Auto", color: "#b91c1c"},
     bus:  {icon: "🚌", name: "Bus", color: "#c2410c"},
     rad:  {icon: "🚲", name: "Fahrrad", color: "#2f7d32"}
   };
@@ -127,12 +131,48 @@ li p{margin:.5rem 0 0}
   function suche(q){
     if (q in cache) return Promise.resolve(cache[q]);
     return new Promise(function(ok){ setTimeout(ok, 1100); })
-      .then(function(){ return fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=de&q=" + encodeURIComponent(q)); })
+      .then(function(){ return fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&accept-language=de&q=" + encodeURIComponent(q)); })
       .then(function(r){ return r.json(); })
       .then(function(a){
-        var p = a && a[0] ? {lat: parseFloat(a[0].lat), lon: parseFloat(a[0].lon)} : null;
+        var p = a && a[0] ? {lat: parseFloat(a[0].lat), lon: parseFloat(a[0].lon), land: (a[0].address && a[0].address.country) || ""} : null;
         cache[q] = p; return p;
       }, function(){ return null; });
+  }
+
+  /* ---------- Suche ---------- */
+  function heuhaufen(e){
+    var t = TYPEN[e.typ], teile = [e.ort, e.notiz, t ? t.name : ""];
+    (e.orte || []).forEach(function(o){ teile.push(o.name, o.land || ""); });
+    [e.datum, e.bis].forEach(function(iso){
+      if (!iso) return;
+      var d = iso.split("-");
+      if (d.length !== 3) return;
+      teile.push(iso, d[2] + "." + d[1] + "." + d[0], parseInt(d[2], 10) + "." + parseInt(d[1], 10) + "." + d[0], fmt(iso));
+    });
+    return teile.join(" ").toLowerCase();
+  }
+  function sichtbar(){
+    var q = $("suche").value.toLowerCase().split(/[\s,]+/).filter(Boolean);
+    if (!q.length) return eintraege;
+    return eintraege.filter(function(e){ var h = heuhaufen(e); return q.every(function(w){ return h.indexOf(w) > -1; }); });
+  }
+  async function laenderNachtragen(){   // Länder für ältere Einträge ergänzen
+    var geaendert = false;
+    for (var i = 0; i < eintraege.length; i++) {
+      var orte = eintraege[i].orte || [];
+      for (var j = 0; j < orte.length; j++) {
+        var o = orte[j];
+        if (!o.pos || o.land !== undefined) continue;
+        try {
+          await new Promise(function(ok){ setTimeout(ok, 1100); });
+          var r = await fetch("https://nominatim.openstreetmap.org/reverse?format=json&zoom=3&accept-language=de&lat=" + o.pos.lat + "&lon=" + o.pos.lon);
+          var d = await r.json();
+          o.land = d && d.address && d.address.country ? d.address.country : "";
+          geaendert = true;
+        } catch(err){ i = eintraege.length; break; }
+      }
+    }
+    if (geaendert) speichern();
   }
 
   /* ---------- Karte ---------- */
@@ -151,7 +191,7 @@ li p{margin:.5rem 0 0}
     if (!map) return;
     ebene.clearLayers();
     var alle = [];
-    eintraege.forEach(function(e){
+    sichtbar().forEach(function(e){
       var t = TYPEN[e.typ], farbe = t ? t.color : "#b7791f", punktliste = [], strecke = [];
       function strichZiehen(){ if (t && strecke.length > 1) L.polyline(strecke, {color: farbe, weight: 4, opacity: .85}).addTo(ebene); }
       (e.orte || []).forEach(function(o){
@@ -159,7 +199,7 @@ li p{margin:.5rem 0 0}
         var ll = [o.pos.lat, o.pos.lon], m;
         if (o.flug) {
           strichZiehen(); strecke = [ll];
-          m = L.marker(ll, {icon: L.divIcon({className: "flugicon", html: "✈️", iconSize: [28, 28], iconAnchor: [14, 14]})});
+          m = L.circleMarker(ll, {radius: 10, color: "#fff", weight: 3, fillColor: "#1d4ed8", fillOpacity: 1});
         } else {
           strecke.push(ll);
           m = L.circleMarker(ll, {radius: 8, color: "#fff", weight: 2, fillColor: farbe, fillOpacity: 1});
@@ -178,11 +218,13 @@ li p{margin:.5rem 0 0}
   function listeZeichnen(){
     var ul = $("liste");
     ul.innerHTML = "";
-    if (!eintraege.length) { ul.innerHTML = '<li class="empty">Noch keine Reise eingetragen. Tippe oben auf den Knopf.</li>'; return; }
-    eintraege.slice().sort(function(a, b){ return b.datum.localeCompare(a.datum); }).forEach(function(e){
+    var liste = sichtbar();
+    $("treffer").textContent = $("suche").value.trim() ? liste.length + " von " + eintraege.length + " Reisen gefunden." : "Zum Beispiel: Finnland, Hundeschlitten, 2026 oder März 2026.";
+    if (!liste.length) { ul.innerHTML = eintraege.length ? '<li class="empty">Keine Reise gefunden.</li>' : '<li class="empty">Noch keine Reise eingetragen. Tippe oben auf den Knopf.</li>'; return; }
+    liste.slice().sort(function(a, b){ return b.datum.localeCompare(a.datum); }).forEach(function(e){
       var t = TYPEN[e.typ];
       var h = "<h2>" + (t ? t.icon + " " : "") + esc(e.ort) + "</h2><time datetime='" + esc(e.datum) + "'>" + esc(zeitraum(e)) + (t ? " · " + t.name : "") + "</time>";
-      if (e.orte && e.orte.length) h += "<p><b>Orte:</b> " + e.orte.map(function(o){ return esc(o.name) + (o.flug ? " ✈️" : ""); }).join(t ? " → " : ", ") + "</p>";
+      if (e.orte && e.orte.length) h += "<p><b>Orte:</b> " + e.orte.map(function(o){ return esc(o.name) + (o.flug ? " (geflogen)" : ""); }).join(t ? " → " : ", ") + "</p>";
       if (e.notiz) h += '<p style="white-space:pre-wrap">' + esc(e.notiz) + "</p>";
       h += '<div class="actions"><button data-a="edit">Bearbeiten</button>' + (punkte(e).length ? '<button data-a="karte">Auf Karte zeigen</button>' : "") + '<button class="danger" data-a="del">Löschen</button></div>';
       var li = document.createElement("li");
@@ -230,7 +272,7 @@ li p{margin:.5rem 0 0}
     ev.preventDefault();
     var alt = null, bekannt = {};
     eintraege.forEach(function(x){ if (x.id === bearbeitetId) alt = x; });
-    if (alt) (alt.orte || []).forEach(function(o){ if (o.pos) bekannt[o.name] = o.pos; });
+    if (alt) (alt.orte || []).forEach(function(o){ if (o.pos) bekannt[o.name] = o; });
     var typ = document.querySelector("input[name=typ]:checked");
     var e = {
       id: alt ? alt.id : Date.now(), datum: $("datum").value, bis: $("bis").value, typ: typ ? typ.value : "",
@@ -247,24 +289,52 @@ li p{margin:.5rem 0 0}
     try {
       for (var i = 0; i < e.orte.length; i++) {
         var o = e.orte[i];
-        if (bekannt[o.name]) o.pos = bekannt[o.name];
+        if (bekannt[o.name]) { o.pos = bekannt[o.name].pos; o.land = bekannt[o.name].land; }
         else {
           $("status").textContent = "Orte werden gesucht (" + (i + 1) + " von " + e.orte.length + ") …";
-          o.pos = await suche(o.name);
+          var r = await suche(o.name);
+          o.pos = r ? {lat: r.lat, lon: r.lon} : null;
+          if (r) o.land = r.land;
         }
         if (!o.pos) fehlt.push(o.name);
       }
     } catch(err){}
     if (alt) eintraege = eintraege.map(function(x){ return x.id === e.id ? e : x; });
     else eintraege.push(e);
+    $("suche").value = "";
     speichern(); listeZeichnen(); pinsZeichnen(e);
     formZuruecksetzen();
     if (fehlt.length) alert("Gespeichert. Diese Orte wurden auf der Karte nicht gefunden: " + fehlt.join(", ") + ".\n\nTippe beim Eintrag auf „Bearbeiten“ und schreibe den Ort genauer, zum Beispiel mit dem Land.");
   };
 
+  /* ---------- Download als Tabelle (CSV, öffnet sich in Excel, Numbers, Google Tabellen) ---------- */
+  function csvFeld(x){ return '"' + String(x == null ? "" : x).replace(/"/g, '""') + '"'; }
+  function tag(iso){ var d = iso.split("-"); return d.length === 3 ? d[2] + "." + d[1] + "." + d[0] : iso; }
+  $("download").onclick = function(){
+    if (!eintraege.length) { alert("Es gibt noch keine Einträge zum Herunterladen."); return; }
+    var tabelle = [["Datum", "Freitext", "Städte", "Art der Reise"]];
+    eintraege.slice().sort(function(a, b){ return a.datum.localeCompare(b.datum); }).forEach(function(e){
+      var t = TYPEN[e.typ];
+      tabelle.push([
+        e.bis && e.bis !== e.datum ? tag(e.datum) + " bis " + tag(e.bis) : tag(e.datum),
+        e.notiz || "",
+        (e.orte || []).map(function(o){ return o.name + (o.flug ? " (F)" : ""); }).join("; "),
+        t ? t.name : ""
+      ]);
+    });
+    var csv = "\uFEFF" + tabelle.map(function(z){ return z.map(csvFeld).join(";"); }).join("\r\n");
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], {type: "text/csv;charset=utf-8"}));
+    a.download = "Reisetagebuch.csv";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  };
+
+  $("suche").oninput = function(){ listeZeichnen(); pinsZeichnen(); };
   karteStarten();
   listeZeichnen();
   pinsZeichnen();
+  if (navigator.onLine !== false) laenderNachtragen();
 })();
 </script>
 </body>
